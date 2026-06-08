@@ -3,3 +3,7 @@ images/
 captions.txt
 
 .DS_Store
+
+test_features.pkl
+
+train_features.pkl
