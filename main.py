@@ -34,3 +34,4 @@ with open("cleaned_captions.pkl", "rb") as f:
 
 word_freq = Counter(w for caps in cleaned_captions.values()for cap in caps for w in cap.split())
 vocab = {w for w, c in word_freq.items() if c >= 10}
+print(f"vocabulary size: {len(vocab)}")
