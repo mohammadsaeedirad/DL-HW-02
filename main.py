@@ -3,6 +3,7 @@ import pandas as pd
 from collections import Counter
 import pickle
 import string
+import random
 
 
 BASE_PATH = "."
@@ -35,3 +36,26 @@ with open("cleaned_captions.pkl", "rb") as f:
 word_freq = Counter(w for caps in cleaned_captions.values()for cap in caps for w in cap.split())
 vocab = {w for w, c in word_freq.items() if c >= 10}
 print(f"vocabulary size: {len(vocab)}")
+
+
+df = pd.read_csv(os.path.join(BASE_PATH, "captions.txt"))
+all_ids = [x.split('.')[0] for x in df['image'].unique()]
+random.seed(42)
+random.shuffle(all_ids)
+
+train_ids = all_ids[:6000]
+test_ids  = all_ids[6000:]
+
+with open("Flickr_8k.trainImages.txt", "w") as f:
+    f.write("\n".join(train_ids))
+with open("Flickr_8k.testImages.txt", "w") as f:
+    f.write("\n".join(test_ids))
+
+print(f"Train: {len(train_ids)}, Test: {len(test_ids)}")
+
+train_img_ids = set(train_ids)
+train_captions = {img_id: [f"<START> {cap} <END>" for cap in caps]
+                  for img_id, caps in cleaned_captions.items()
+                  if img_id in train_img_ids}
+
+print(f"train pictures count: {len(train_captions)}")
