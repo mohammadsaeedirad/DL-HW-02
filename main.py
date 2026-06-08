@@ -105,3 +105,20 @@ if train_features:
     print(f"train features: {len(train_features)}, shape: {next(iter(train_features.values())).shape}")
 else:
     print("train_features خالیه! نام فایل‌ها رو بررسی کن.")
+
+
+special_tokens = ["<PAD>", "<START>", "<END>", "<UNK>"]
+full_vocab = special_tokens + sorted(list(vocab))
+
+word2idx = {w: i for i, w in enumerate(full_vocab)}
+idx2word = {i: w for w, i in word2idx.items()}
+
+VOCAB_SIZE = len(word2idx)
+print(f"vocab final size: {VOCAB_SIZE}")
+
+max_len = max(
+    len(cap.split())
+    for caps in train_captions.values()
+    for cap in caps
+)
+print(f"caption max lenght: {max_len}")
