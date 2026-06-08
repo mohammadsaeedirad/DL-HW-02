@@ -28,3 +28,10 @@ cleaned_captions = {img_id: [clean_caption(c) for c in caps]
 
 with open("cleaned_captions.pkl", "wb") as f:
     pickle.dump(cleaned_captions, f)
+
+with open("cleaned_captions.pkl", "rb") as f:
+    cleaned_captions = pickle.load(f)
+
+word_freq = Counter(w for caps in cleaned_captions.values()for cap in caps for w in cap.split())
+vocab = {w for w, c in word_freq.items() if c >= 10}
+print(f"vocabulary size: {len(vocab)}")
