@@ -7,3 +7,5 @@ captions.txt
 test_features.pkl
 
 train_features.pkl
+
+glove.6B.200d.txt

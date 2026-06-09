@@ -9,6 +9,8 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 import numpy as np
 from PIL import Image
+import torch
+from torch.utils.data import Dataset, DataLoader
 
 
 BASE_PATH = "."
@@ -123,3 +125,60 @@ max_len = max(
     for cap in caps
 )
 print(f"caption max lenght: {max_len}")
+
+
+def pad_sequence_manual(seq, max_len, pad_idx=0):
+    return seq + [pad_idx] * (max_len - len(seq))
+
+class CaptionDataset(Dataset):
+    def __init__(self, captions, features, word2idx, max_len):
+        self.data = []
+        for img_id, caps in captions.items():
+            if img_id not in features:
+                continue
+            feat = features[img_id]
+            for cap in caps:
+                tokens = [word2idx.get(w, word2idx["<UNK>"]) for w in cap.split()]
+                # برای هر کلمه هدف: ورودی = تمام قبلی‌ها + تصویر
+                for i in range(1, len(tokens)):
+                    in_seq = pad_sequence_manual(tokens[:i], max_len, word2idx["<PAD>"])
+                    out_word = tokens[i]
+                    self.data.append((feat, in_seq, out_word))
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        feat, seq, target = self.data[idx]
+        return (
+            torch.tensor(feat, dtype=torch.float32),
+            torch.tensor(seq, dtype=torch.long),
+            torch.tensor(target, dtype=torch.long)
+        )
+
+with open("train_features.pkl", "rb") as f:
+    train_features = pickle.load(f)
+
+dataset = CaptionDataset(train_captions, train_features, word2idx, max_len)
+dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+print(f"Data Generator sample count: {len(dataset)}")
+
+EMBED_DIM = 200  # glove.6B.200d
+
+def load_glove(glove_path, embed_dim):
+    glove = {}
+    with open(glove_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            vals = line.split()
+            glove[vals[0]] = np.array(vals[1:], dtype=np.float32)
+    return glove
+
+glove_vectors = load_glove("glove.6B.200d.txt", EMBED_DIM)
+
+embedding_matrix = np.zeros((VOCAB_SIZE, EMBED_DIM))
+for word, idx in word2idx.items():
+    if word in glove_vectors:
+        embedding_matrix[idx] = glove_vectors[word]
+
+embedding_matrix = torch.tensor(embedding_matrix, dtype=torch.float32)
+print(f"embedding matrix shape: {embedding_matrix.shape}")
