@@ -257,3 +257,32 @@ print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {avg_loss:.4f} - Acc: {acc:.4f}")
 
 writer.close()
 torch.save(model.state_dict(), "caption_model.pth")
+
+
+def generate_caption(model, img_feat, word2idx, idx2word, max_len):
+    model.eval()
+    seq = [word2idx["<START>"]]
+    img_tensor = torch.tensor(img_feat, dtype=torch.float32).unsqueeze(0).to(device)
+    
+    with torch.no_grad():
+        for _ in range(max_len):
+            seq_padded = pad_sequence_manual(seq, max_len, word2idx["<PAD>"])
+            seq_tensor = torch.tensor([seq_padded], dtype=torch.long).to(device)
+            output = model(img_tensor, seq_tensor)
+            next_word_idx = output.argmax(dim=-1).item()
+            seq.append(next_word_idx)
+            if idx2word[next_word_idx] == "<END>":
+                break
+    
+    words = [idx2word[i] for i in seq[1:] if idx2word[i] not in ["<END>", "<PAD>"]]
+    return ' '.join(words)
+
+# اعمال روی چند تصویر تست
+with open("test_features.pkl", "rb") as f:
+    test_features = pickle.load(f)
+
+model.load_state_dict(torch.load("caption_model.pth"))
+
+for img_id, feat in list(test_features.items())[:5]:
+    caption = generate_caption(model, feat, word2idx, idx2word, max_len)
+    print(f"{img_id}: {caption}")
