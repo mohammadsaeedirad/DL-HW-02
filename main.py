@@ -182,3 +182,78 @@ for word, idx in word2idx.items():
 
 embedding_matrix = torch.tensor(embedding_matrix, dtype=torch.float32)
 print(f"embedding matrix shape: {embedding_matrix.shape}")
+
+optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-3)
+criterion = nn.CrossEntropyLoss(ignore_index=word2idx["<PAD>"])
+
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter("runs/captioning")
+
+
+import torch.nn as nn
+
+class ImageCaptionModel(nn.Module):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, feat_dim=2048):
+        super().__init__()
+        self.image_fc = nn.Linear(feat_dim, hidden_dim)
+        
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.embedding.weight = nn.Parameter(embedding_matrix)
+        self.embedding.weight.requires_grad = False  # freeze GloVe
+        
+        self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True)
+        self.fc_out = nn.Linear(hidden_dim * 2, vocab_size)
+        self.dropout = nn.Dropout(0.3)
+
+    def forward(self, img_feat, seq):
+        img_emb = torch.relu(self.image_fc(img_feat))          # (B, hidden)
+        word_emb = self.dropout(self.embedding(seq))           # (B, T, embed)
+        lstm_out, _ = self.lstm(word_emb)                      # (B, T, hidden)
+        # الحاق ویژگی تصویر به هر گام زمانی
+        img_expanded = img_emb.unsqueeze(1).expand(-1, lstm_out.size(1), -1)
+        combined = torch.cat([lstm_out, img_expanded], dim=-1) # (B, T, hidden*2)
+        out = self.fc_out(combined[:, -1, :])
+        return out
+
+
+HIDDEN_DIM = 256
+model = ImageCaptionModel(VOCAB_SIZE, EMBED_DIM, HIDDEN_DIM).to(device)
+print(model)
+
+EPOCHS = 10
+for epoch in range(EPOCHS):
+    model.train()
+    total_loss = 0
+    correct = 0
+    total = 0
+    for img_feat, seq, target in dataloader:
+        img_feat, seq, target = img_feat.to(device), seq.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(img_feat, seq)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+        correct += (output.argmax(dim=-1) == target).sum().item()
+        total += target.size(0)
+    avg_loss = total_loss / len(dataloader)
+    accuracy = correct / total
+    writer.add_scalar("Loss/train", avg_loss, epoch)
+    writer.add_scalar("Accuracy/train", accuracy, epoch)
+    print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {avg_loss:.4f} - Acc: {accuracy:.4f}")
+
+model.eval()
+correct, total = 0, 0
+with torch.no_grad():
+    for img_feat, seq, target in dataloader:
+        img_feat, seq, target = img_feat.to(device), seq.to(device), target.to(device)
+        output = model(img_feat, seq)
+        preds = output.argmax(dim=-1)
+        correct += (preds == target).sum().item()
+        total += target.size(0)
+acc = correct / total
+writer.add_scalar("Accuracy/train", acc, epoch)
+print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {avg_loss:.4f} - Acc: {acc:.4f}")
+
+writer.close()
+torch.save(model.state_dict(), "caption_model.pth")
